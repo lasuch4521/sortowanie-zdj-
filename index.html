@@ -18,6 +18,8 @@
       --keep: #10b981;
       --fav: #f59e0b;
       --border: #334155;
+      /* Bezpieczny odstęp na dole pod gesty Androida / iPhone'a */
+      --safe-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
     }
 
     * {
@@ -41,7 +43,7 @@
     }
 
     header {
-      padding: 14px 20px;
+      padding: 12px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -86,7 +88,7 @@
     }
 
     #view-sort {
-      padding: 12px;
+      padding: 10px 14px 12px;
       justify-content: space-between;
       align-items: center;
     }
@@ -95,7 +97,7 @@
       position: relative;
       width: 100%;
       flex: 1;
-      max-height: 56dvh;
+      max-height: 52dvh;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -162,6 +164,7 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      margin-bottom: 6px;
     }
 
     .album-bar-title {
@@ -210,7 +213,7 @@
       max-width: 380px;
       justify-content: space-around;
       align-items: center;
-      padding: 8px 0;
+      padding: 4px 0 10px;
     }
 
     .btn-circle {
@@ -233,6 +236,7 @@
     .btn-circle.fav { color: var(--fav); border-color: rgba(245, 158, 11, 0.4); }
     .btn-circle.keep { color: var(--keep); border-color: rgba(16, 185, 129, 0.4); }
 
+    /* APARAT - odsunięte od dołu */
     #view-camera {
       background: #000;
       position: relative;
@@ -246,7 +250,7 @@
 
     .camera-hud {
       position: absolute;
-      bottom: 24px;
+      bottom: 28px;
       left: 0;
       right: 0;
       display: flex;
@@ -293,7 +297,6 @@
       font-size: 0.82rem;
       cursor: pointer;
     }
-    .btn-accent:active { opacity: 0.85; }
 
     .gallery-tabs {
       display: flex;
@@ -392,8 +395,10 @@
       cursor: pointer;
     }
 
+    /* GŁÓWNA NAWIGACJA - podniesiona wyżej, żeby nie kolidować z paskiem gestów */
     nav {
-      height: 60px;
+      padding-bottom: var(--safe-bottom);
+      height: calc(56px + var(--safe-bottom));
       background: rgba(9, 13, 22, 0.98);
       border-top: 1px solid var(--border);
       display: flex;

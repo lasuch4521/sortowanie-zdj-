@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>FotoSort</title>
+  <meta name="theme-color" content="#0d1117">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #161f30;
+      --surface: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --trash: #ef4444;
+      --keep: #10b981;
+      --fav: #f59e0b;
+      --border: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(9, 13, 22, 0.95);
+      border-bottom: 1px solid var(--border);
+      z-index: 20;
+    }
+
+    .brand {
+      font-size: 1.3rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #60a5fa, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badge-count {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    main {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .view {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+    }
+
+    .view.active {
+      display: flex;
+    }
+
+    #view-sort {
+      padding: 12px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-stack {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      max-height: 56dvh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .card {
+      position: absolute;
+      width: 90%;
+      height: 100%;
+      max-width: 380px;
+      background: var(--card-bg);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+      border: 1px solid var(--border);
+      touch-action: none;
+      transition: transform 0.15s ease-out;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+    }
+
+    .swipe-label {
+      position: absolute;
+      padding: 8px 18px;
+      border-radius: 10px;
+      font-weight: 900;
+      font-size: 1.2rem;
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+      z-index: 5;
+    }
+
+    .label-keep { right: 20px; top: 30px; color: var(--keep); border: 3px solid var(--keep); transform: rotate(12deg); }
+    .label-trash { left: 20px; top: 30px; color: var(--trash); border: 3px solid var(--trash); transform: rotate(-12deg); }
+    .label-fav { left: 50%; top: 35px; transform: translateX(-50%); color: var(--fav); border: 3px solid var(--fav); }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 14px;
+      color: var(--text-muted);
+      padding: 20px;
+    }
+
+    .empty-state h3 {
+      color: var(--text);
+      font-size: 1.2rem;
+    }
+
+    .album-bar-box {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .album-bar-title {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      padding: 0 4px;
+    }
+
+    .album-bar-title span:last-child {
+      color: var(--accent);
+      cursor: pointer;
+    }
+
+    .album-bar-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 2px;
+      scrollbar-width: none;
+    }
+    .album-bar-scroll::-webkit-scrollbar { display: none; }
+
+    .btn-pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-pill:active { transform: scale(0.92); border-color: var(--accent); }
+
+    .action-controls {
+      display: flex;
+      width: 100%;
+      max-width: 380px;
+      justify-content: space-around;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .btn-circle {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+      transition: transform 0.1s;
+    }
+    .btn-circle:active { transform: scale(0.88); }
+    .btn-circle.trash { color: var(--trash); border-color: rgba(239, 68, 68, 0.4); }
+    .btn-circle.fav { color: var(--fav); border-color: rgba(245, 158, 11, 0.4); }
+    .btn-circle.keep { color: var(--keep); border-color: rgba(16, 185, 129, 0.4); }
+
+    #view-camera {
+      background: #000;
+      position: relative;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .camera-hud {
+      position: absolute;
+      bottom: 24px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding: 0 30px;
+      z-index: 10;
+    }
+
+    .btn-shutter {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 6px solid rgba(255, 255, 255, 0.35);
+      cursor: pointer;
+    }
+    .btn-shutter:active { transform: scale(0.9); background: #cbd5e1; }
+
+    #view-gallery {
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .gallery-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .gallery-top-btns {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-accent {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .btn-accent:active { opacity: 0.85; }
+
+    .gallery-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 12px;
+      scrollbar-width: none;
+    }
+    .gallery-tabs::-webkit-scrollbar { display: none; }
+
+    .tab-item {
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .tab-item.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding-bottom: 60px;
+    }
+
+    .gallery-cell {
+      aspect-ratio: 1;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .gallery-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(5px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.active { display: flex; }
+
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      width: 100%;
+      max-width: 320px;
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+    }
+
+    .modal-box h3 { margin-bottom: 12px; font-size: 1.1rem; }
+    .modal-box input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      margin-bottom: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    nav {
+      height: 60px;
+      background: rgba(9, 13, 22, 0.98);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 20;
+    }
+
+    .nav-link {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .nav-link.active { color: #38bdf8; }
+    .nav-link span:first-child { font-size: 1.3rem; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">FotoSort</div>
+    <div class="badge-count" id="queue-counter">Kolejka: 0</div>
+  </header>
+
+  <main>
+    <div id="view-camera" class="view">
+      <video id="camera-stream" autoplay playsinline muted></video>
+      <canvas id="camera-canvas" style="display: none;"></canvas>
+      <div class="camera-hud">
+        <button class="btn-circle" id="btn-switch-cam">🔄</button>
+        <button class="btn-shutter" id="btn-take-photo"></button>
+        <button class="btn-circle" id="btn-pick-files">📁</button>
+        <input type="file" id="file-selector" accept="image/*" multiple style="display: none;">
+      </div>
+    </div>
+
+    <div id="view-sort" class="view active">
+      <div class="card-stack" id="card-stack">
+        <div class="empty-state" id="empty-state">
+          <div style="font-size: 3.5rem;">✨</div>
+          <h3>Wszystko posortowane!</h3>
+          <p>Wybierz pliki z telefonu lub zrób nowe zdjęcia aparatem.</p>
+        </div>
+      </div>
+
+      <div class="album-bar-box">
+        <div class="album-bar-title">
+          <span>Sortuj do albumu:</span>
+          <span id="btn-open-new-album">+ Nowy</span>
+        </div>
+        <div class="album-bar-scroll" id="album-buttons-container"></div>
+      </div>
+
+      <div class="action-controls">
+        <button class="btn-circle trash" id="btn-swipe-trash" title="Kosz">🗑️</button>
+        <button class="btn-circle fav" id="btn-swipe-fav" title="Ulubione">⭐</button>
+        <button class="btn-circle keep" id="btn-swipe-keep" title="Zachowaj">✅</button>
+      </div>
+    </div>
+
+    <div id="view-gallery" class="view">
+      <div class="gallery-top">
+        <span id="gallery-info" style="font-size: 0.85rem; color: var(--text-muted);">0 zdjęć</span>
+        <div class="gallery-top-btns">
+          <button class="btn-accent" id="btn-add-album-modal">+ Album</button>
+          <button class="btn-accent" id="btn-download-zip" style="background: #10b981;">Pobierz ZIP 📦</button>
+        </div>
+      </div>
+      <div class="gallery-tabs" id="gallery-tabs-box"></div>
+      <div class="gallery-grid" id="gallery-grid-box"></div>
+    </div>
+  </main>
+
+  <div class="modal-backdrop" id="modal-new-album">
+    <div class="modal-box">
+      <h3>Stwórz nowy album</h3>
+      <input type="text" id="input-album-name" placeholder="np. Samochód, Dokumenty..." maxlength="20">
+      <div class="modal-actions">
+        <button class="btn-ghost" id="btn-cancel-modal">Anuluj</button>
+        <button class="btn-accent" id="btn-confirm-modal">Utwórz</button>
+      </div>
+    </div>
+  </div>
+
+  <nav>
+    <button class="nav-link" data-view="view-camera">
+      <span>📷</span>
+      <span>Aparat</span>
+    </button>
+    <button class="nav-link active" data-view="view-sort">
+      <span>⚡</span>
+      <span>Sortuj</span>
+    </button>
+    <button class="nav-link" data-view="view-gallery">
+      <span>🖼️</span>
+      <span>Katalog</span>
+    </button>
+  </nav>
+
+  <script>
+    const appState = {
+      queue: [],
+      albums: {
+        keep: { name: 'Zachowane', icon: '✅', items: [] },
+        fav: { name: 'Ulubione', icon: '⭐', items: [] },
+        trash: { name: 'Kosz', icon: '🗑️', items: [] }
+      },
+      currentCam: 'environment',
+      cameraStream: null,
+      activeGalleryAlbum: 'keep'
+    };
+
+    function triggerHaptic(duration = 25) {
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(duration); } catch (e) {}
+      }
+    }
+
+    const navButtons = document.querySelectorAll('.nav-link');
+    const views = document.querySelectorAll('.view');
+
+    navButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetView = btn.getAttribute('data-view');
+        navButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        views.forEach(v => v.classList.remove('active'));
+        document.getElementById(targetView).classList.add('active');
+
+        if (targetView === 'view-camera') {
+          startCamera();
+        } else {
+          stopCamera();
+        }
+
+        if (targetView === 'view-gallery') {
+          renderGalleryTabs();
+          renderGalleryGrid();
+        }
+      });
+    });
+
+    const videoElem = document.getElementById('camera-stream');
+    const canvasElem = document.getElementById('camera-canvas');
+    const btnSwitchCam = document.getElementById('btn-switch-cam');
+    const btnTakePhoto = document.getElementById('btn-take-photo');
+    const btnPickFiles = document.getElementById('btn-pick-files');
+    const fileSelector = document.getElementById('file-selector');
+
+    async function startCamera() {
+      stopCamera();
+      try {
+        appState.cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: appState.currentCam } },
+          audio: false
+        });
+        videoElem.srcObject = appState.cameraStream;
+      } catch (e) {
+        console.warn('Brak dostępu do kamery.');
+      }
+    }
+
+    function stopCamera() {
+      if (appState.cameraStream) {
+        appState.cameraStream.getTracks().forEach(track => track.stop());
+        appState.cameraStream = null;
+      }
+    }
+
+    btnSwitchCam.addEventListener('click', () => {
+      appState.currentCam = appState.currentCam === 'environment' ? 'user' : 'environment';
+      triggerHaptic(20);
+      startCamera();
+    });
+
+    btnTakePhoto.addEventListener('click', () => {
+      if (!videoElem.videoWidth) return;
+      triggerHaptic(50);
+      canvasElem.width = videoElem.videoWidth;
+      canvasElem.height = videoElem.videoHeight;
+      const ctx = canvasElem.getContext('2d');
+      ctx.drawImage(videoElem, 0, 0);
+      appState.queue.push({
+        id: 'cam_' + Date.now(),
+        dataUrl: canvasElem.toDataURL('image/jpeg', 0.9)
+      });
+      updateQueueHeader();
+      renderCardStack();
+    });
+
+    btnPickFiles.addEventListener('click', () => fileSelector.click());
+
+    fileSelector.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          appState.queue.push({
+            id: 'file_' + Math.random().toString(36).substring(2, 9),
+            dataUrl: event.target.result
+          });
+          updateQueueHeader();
+          renderCardStack();
+        };
+        reader.readAsDataURL(file);
+      });
+      fileSelector.value = '';
+    });
+
+    const cardStack = document.getElementById('card-stack');
+    const emptyState = document.getElementById('empty-state');
+    const queueCounter = document.getElementById('queue-counter');
+
+    function updateQueueHeader() {
+      queueCounter.textContent = `Kolejka: ${appState.queue.length}`;
+    }
+
+    function renderCardStack() {
+      cardStack.querySelectorAll('.card').forEach(c => c.remove());
+      if (appState.queue.length === 0) {
+        emptyState.style.display = 'flex';
+        return;
+      }
+      emptyState.style.display = 'none';
+
+      const visibleSlice = appState.queue.slice(-2);
+      visibleSlice.forEach((item, idx) => {
+        const isTop = idx === visibleSlice.length - 1;
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.zIndex = idx;
+
+        if (!isTop) {
+          card.style.transform = 'scale(0.94) translateY(14px)';
+          card.style.opacity = '0.6';
+        }
+
+        card.innerHTML = `
+          <div class="swipe-label label-keep">ZACHOWAJ</div>
+          <div class="swipe-label label-trash">KOSZ</div>
+          <div class="swipe-label label-fav">ULUBIONE</div>
+          <img src="${item.dataUrl}" alt="Foto">
+        `;
+
+        if (isTop) attachGestureListeners(card, item);
+        cardStack.appendChild(card);
+      });
+    }
+
+    function attachGestureListeners(card, item) {
+      let startX = 0, startY = 0, moveX = 0, moveY = 0;
+      let isDragging = false;
+
+      const labelKeep = card.querySelector('.label-keep');
+      const labelTrash = card.querySelector('.label-trash');
+      const labelFav = card.querySelector('.label-fav');
+
+      const onStart = (e) => {
+        isDragging = true;
+        const pointer = e.touches ? e.touches[0] : e;
+        startX = pointer.clientX;
+        startY = pointer.clientY;
+      };
+
+      const onMove = (e) => {
+        if (!isDragging) return;
+        const pointer = e.touches ? e.touches[0] : e;
+        moveX = pointer.clientX - startX;
+        moveY = pointer.clientY - startY;
+
+        card.style.transform = `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.08}deg)`;
+
+        labelKeep.style.opacity = moveX > 40 ? Math.min((moveX - 40) / 80, 1) : 0;
+        labelTrash.style.opacity = moveX < -40 ? Math.min((-moveX - 40) / 80, 1) : 0;
+        labelFav.style.opacity = moveY < -40 && Math.abs(moveX) < 40 ? Math.min((-moveY - 40) / 80, 1) : 0;
+      };
+
+      const onEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        const threshold = 90;
+
+        if (moveX > threshold) {
+          executeSort(item, 'keep', 450, 0);
+        } else if (moveX < -threshold) {
+          executeSort(item, 'trash', -450, 0);
+        } else if (moveY < -threshold) {
+          executeSort(item, 'fav', 0, -450);
+        } else {
+          card.style.transform = 'translate(0px, 0px) rotate(0deg)';
+          labelKeep.style.opacity = 0;
+          labelTrash.style.opacity = 0;
+          labelFav.style.opacity = 0;
+        }
+      };
+
+      card.addEventListener('touchstart', onStart, { passive: true });
+      card.addEventListener('touchmove', onMove, { passive: true });
+      card.addEventListener('touchend', onEnd);
+
+      card.addEventListener('mousedown', onStart);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+    }
+
+    function executeSort(item, albumId, xOffset, yOffset) {
+      triggerHaptic(30);
+      const activeCard = cardStack.querySelector('.card:last-child');
+      if (activeCard) {
+        activeCard.style.transition = 'transform 0.22s ease-out, opacity 0.22s ease-out';
+        activeCard.style.transform = `translate(${xOffset}px, ${yOffset}px) rotate(${xOffset * 0.05}deg)`;
+        activeCard.style.opacity = '0';
+      }
+
+      setTimeout(() => {
+        if (!appState.albums[albumId]) albumId = 'keep';
+        appState.albums[albumId].items.push(item);
+        appState.queue.pop();
+        updateQueueHeader();
+        renderCardStack();
+      }, 180);
+    }
+
+    document.getElementById('btn-swipe-trash').addEventListener('click', () => {
+      if (appState.queue.length) executeSort(appState.queue[appState.queue.length - 1], 'trash', -450, 0);
+    });
+    document.getElementById('btn-swipe-fav').addEventListener('click', () => {
+      if (appState.queue.length) executeSort(appState.queue[appState.queue.length - 1], 'fav', 0, -450);
+    });
+    document.getElementById('btn-swipe-keep').addEventListener('click', () => {
+      if (appState.queue.length) executeSort(appState.queue[appState.queue.length - 1], 'keep', 450, 0);
+    });
+
+    const albumButtonsContainer = document.getElementById('album-buttons-container');
+
+    function renderAlbumPills() {
+      albumButtonsContainer.innerHTML = '';
+      Object.entries(appState.albums).forEach(([id, album]) => {
+        if (id === 'trash') return;
+        const pill = document.createElement('button');
+        pill.className = 'btn-pill';
+        pill.innerHTML = `<span>${album.icon}</span> <span>${album.name}</span>`;
+        pill.addEventListener('click', () => {
+          if (appState.queue.length === 0) return;
+          executeSort(appState.queue[appState.queue.length - 1], id, 350, -100);
+        });
+        albumButtonsContainer.appendChild(pill);
+      });
+    }
+
+    const modalNewAlbum = document.getElementById('modal-new-album');
+    const inputAlbumName = document.getElementById('input-album-name');
+    const btnCancelModal = document.getElementById('btn-cancel-modal');
+    const btnConfirmModal = document.getElementById('btn-confirm-modal');
+
+    function openModal() {
+      inputAlbumName.value = '';
+      modalNewAlbum.classList.add('active');
+      setTimeout(() => inputAlbumName.focus(), 60);
+    }
+    function closeModal() {
+      modalNewAlbum.classList.remove('active');
+    }
+
+    document.getElementById('btn-open-new-album').addEventListener('click', openModal);
+    document.getElementById('btn-add-album-modal').addEventListener('click', openModal);
+    btnCancelModal.addEventListener('click', closeModal);
+
+    btnConfirmModal.addEventListener('click', () => {
+      const name = inputAlbumName.value.trim();
+      if (!name) return;
+      const albumKey = 'custom_' + Date.now();
+      appState.albums[albumKey] = { name: name, icon: '📁', items: [] };
+      closeModal();
+      triggerHaptic(40);
+      renderAlbumPills();
+      renderGalleryTabs();
+    });
+
+    const galleryTabsBox = document.getElementById('gallery-tabs-box');
+    const galleryGridBox = document.getElementById('gallery-grid-box');
+    const galleryInfo = document.getElementById('gallery-info');
+
+    function renderGalleryTabs() {
+      galleryTabsBox.innerHTML = '';
+      Object.entries(appState.albums).forEach(([id, album]) => {
+        const tab = document.createElement('button');
+        tab.className = `tab-item ${appState.activeGalleryAlbum === id ? 'active' : ''}`;
+        tab.innerHTML = `${album.icon} ${album.name} (${album.items.length})`;
+        tab.addEventListener('click', () => {
+          appState.activeGalleryAlbum = id;
+          renderGalleryTabs();
+          renderGalleryGrid();
+        });
+        galleryTabsBox.appendChild(tab);
+      });
+    }
+
+    function renderGalleryGrid() {
+      galleryGridBox.innerHTML = '';
+      const current = appState.albums[appState.activeGalleryAlbum];
+      if (!current) return;
+      galleryInfo.textContent = `${current.name}: ${current.items.length} zdjęć`;
+
+      current.items.forEach(photo => {
+        const cell = document.createElement('div');
+        cell.className = 'gallery-cell';
+        cell.innerHTML = `<img src="${photo.dataUrl}" alt="Skan">`;
+        galleryGridBox.appendChild(cell);
+      });
+    }
+
+    document.getElementById('btn-download-zip').addEventListener('click', async () => {
+      const current = appState.albums[appState.activeGalleryAlbum];
+      if (!current || current.items.length === 0) {
+        alert('Ten album jest pusty!');
+        return;
+      }
+      const zip = new JSZip();
+      current.items.forEach((photo, i) => {
+        const base64Data = photo.dataUrl.split(',')[1];
+        zip.file(`${current.name}_${i + 1}.jpg`, base64Data, { base64: true });
+      });
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `FotoSort_${current.name}.zip`;
+      a.click();
+    });
+
+    renderAlbumPills();
+    updateQueueHeader();
+    renderCardStack();
+  </script>
+</body>
+</html>
